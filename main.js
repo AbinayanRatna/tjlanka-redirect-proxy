@@ -6,66 +6,85 @@ const client = mqtt.connect('mqtt://mqtt.protonest.co', {
   username: USERNAME,
   password: 'Test@#Protonest%01@20',
   clientId: USERNAME,
-
   keepalive: 60,
   reconnectPeriod: 2000,
   clean: true
 });
 
-const SOURCE_TOPIC = 'teejay/power';
-const DEST_TOPIC = 'protonest/testnew9/stream/tjvalues1';
-
-function fixPayload(rawMessage) {
-  let str = rawMessage.toString();
-
-  try {
-    str = str.replace(/"Serial_No":\s*(0x[0-9A-Fa-f]+)/, `"Serial_No":"$1"`);
-
-    let count = 0;
-    str = str.replace(/"kVArh2_Import":/g, (match) => {
-      count++;
-      return count === 2 ? `"kVArh2_Export":` : match;
-    });
-
-    return JSON.parse(str);
-
-  } catch (err) {
-    console.error('❌ JSON Fix Failed:', err.message);
-    return null;
+const TOPIC_MAPPINGS = {
+  'protonest/gateway002/stream/test2': {
+    destination: 'protonest/gateway002/stream/tjvalues1',
+    requiredFields: [
+      'flow_rate',
+      'tot_count_1',
+      'tot_count_2',
+      'tot_count_3',
+      'actual_ma_in',
+      'tot_32_h',
+      'tot_32_l'
+    ]
+  },
+  'protonest/gateway003/stream/test': {
+    destination: 'protonest/gateway003/stream/tjvalues1',
+    requiredFields: [
+      'pv',
+      'sv',
+      'mv_percent',
+      'auto_manual',
+      'decimal_piont',
+      'unit_code'
+    ]
   }
-}
+};
 
 client.on('connect', () => {
   console.log('✅ Connected to MQTT broker');
 
-  client.subscribe(SOURCE_TOPIC, (err) => {
-    if (!err) {
-      console.log(`📡 Subscribed to ${SOURCE_TOPIC}`);
-    } else {
+  const topics = Object.keys(TOPIC_MAPPINGS);
+
+  client.subscribe(topics, (err) => {
+    if (err) {
       console.error('❌ Subscribe error:', err);
+    } else {
+      console.log('📡 Subscribed to topics:');
+      topics.forEach(topic => console.log(`   - ${topic}`));
     }
   });
 });
 
 client.on('message', (topic, message) => {
-  console.log(`📥 Received from ${topic}`);
+  const config = TOPIC_MAPPINGS[topic];
 
-  const fixedData = fixPayload(message);
-
-  if (!fixedData) {
-    console.log('⚠️ Skipping invalid payload');
+  if (!config) {
     return;
   }
 
-  const cleanPayload = JSON.stringify(fixedData);
+  try {
+    const payload = JSON.parse(message.toString());
 
-  client.publish(DEST_TOPIC, cleanPayload, (err) => {
-    if (err) {
-      console.error('❌ Publish error:', err);
-    } else {
-      console.log(`📤 Clean data published to ${DEST_TOPIC}`);
+    // Create a clean payload with only the required fields
+    const filteredPayload = {};
+
+    for (const field of config.requiredFields) {
+      if (payload[field] !== undefined) {
+        filteredPayload[field] = payload[field];
+      }
     }
-  });
+
+    const output = JSON.stringify(filteredPayload);
+
+    client.publish(config.destination, output, (err) => {
+      if (err) {
+        console.error(`❌ Publish error to ${config.destination}:`, err);
+      } else {
+        console.log(`📤 Forwarded ${topic} → ${config.destination}`);
+        // console.log(output);
+      }
+    });
+
+  } catch (err) {
+    console.error(`❌ Invalid JSON received from ${topic}:`, err.message);
+  }
 });
 
 client.on('reconnect', () => console.log('🔄 Reconnecting...'));

@@ -13,7 +13,7 @@ const client = mqtt.connect('mqtt://mqtt.protonest.co', {
 
 const TOPIC_MAPPINGS = {
   'protonest/gateway002/stream/test2': {
-    destination: 'protonest/gateway002/stream/tjvalues1',
+    destination: 'protonest/gateway0002/stream/tjvalues1',
     requiredFields: [
       'flow_rate',
       'tot_count_1',
@@ -25,7 +25,7 @@ const TOPIC_MAPPINGS = {
     ]
   },
   'protonest/gateway003/stream/test': {
-    destination: 'protonest/gateway003/stream/tjvalues1',
+    destination: 'protonest/gateway0003/stream/tjvalues1',
     requiredFields: [
       'pv',
       'sv',
